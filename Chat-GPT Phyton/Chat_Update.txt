@@ -1,0 +1,251 @@
+import os
+import json
+import openai
+import platform
+import time
+import ctypes
+import tkinter as tk
+from tkinter import messagebox
+
+openai.api_key = ""
+
+accounts_folder = "Accounts"
+chat_folder = "Chat"
+
+gpt_profile_file = os.path.join(accounts_folder, "Gpt_Profile.json")
+user_profile_file = os.path.join(accounts_folder, "User_Profile.json")
+chat_history_file = os.path.join(chat_folder, "Chat_History.txt")
+update_log_file = os.path.join(chat_folder, "Update_Log.txt")
+
+def generate_chat(prompt, max_tokens):
+    response = openai.Completion.create(
+        engine='text-davinci-003',
+        prompt=prompt,
+        max_tokens=max_tokens,
+        temperature=0.7,
+        n=1,
+        stop=None,
+    )
+    message = response.choices[0].text.strip()
+    return message
+
+def load_chat_history(file_path):
+    if not os.path.isfile(file_path):
+        return []
+
+    with open(file_path, "r", encoding="utf-8") as file:
+        chat_history = [line.strip() for line in file.readlines() if line.strip()]
+
+    return chat_history
+
+def save_chat_history(file_path, chat_history):
+    with open(file_path, "w", encoding="utf-8") as file:
+        file.write("\n".join(chat_history))
+
+def load_profile(file_path):
+    if not os.path.isfile(file_path):
+        return None
+
+    with open(file_path, "r", encoding="utf-8") as file:
+        profile = json.load(file)
+
+    return profile
+
+def save_profile(file_path, profile):
+    with open(file_path, "w", encoding="utf-8") as file:
+        json.dump(profile, file, indent=4)
+
+def load_update_log(file_path):
+    if not os.path.isfile(file_path):
+        return []
+
+    with open(file_path, "r", encoding="utf-8") as file:
+        update_log = [line.strip() for line in file.readlines() if line.strip()]
+
+    return update_log
+
+def save_update_log(file_path, update_log):
+    with open(file_path, "w", encoding="utf-8") as file:
+        file.write("\n".join(update_log))
+
+def request_username():
+    username = input("Введите ваш никнейм: ")
+    return username
+
+def request_openai_key():
+    openai_key = input("Введите ваш OpenAI API Key: ")
+    return openai_key
+
+def initialize_profiles():
+    if not os.path.isfile(gpt_profile_file):
+        gpt_profile = {
+            "username": "Chat_GPT",
+            "api_key": openai.api_key
+        }
+        save_profile(gpt_profile_file, gpt_profile)
+
+    if not os.path.isfile(user_profile_file):
+        username = request_username()
+        openai_key = request_openai_key()
+        user_profile = {
+            "username": username,
+            "api_key": openai_key
+        }
+        save_profile(user_profile_file, user_profile)
+
+def format_chat_message(username, message):
+    return f"{username} - {message}"
+
+def clear_screen():
+    if platform.system() == "Windows":
+        os.system("cls")
+    else:
+        os.system("clear")
+
+def delete_account():
+    print("Вы уверены, что хотите удалить ваш аккаунт из чата?")
+    confirmation = input("Введите 'Да' для подтверждения: ")
+    if confirmation.lower() == "да":
+        if os.path.isfile(user_profile_file):
+            os.remove(user_profile_file)
+            print("Ваш аккаунт был успешно удален.")
+            print("Чат будет закрыт через 2 секунды.")
+            time.sleep(2)
+            if platform.system() == "Windows":
+                ctypes.windll.user32.MessageBoxW(0, "Ваш аккаунт был успешно удален.", "Удаление аккаунта", 0x40 | 0x1)
+            exit()
+        else:
+            print("Ваш аккаунт не найден.")
+    else:
+        print("Удаление аккаунта отменено.")
+
+def send_message():
+    user_input = entry.get()
+    if user_input.lower() == 'выход':
+        exit()
+    
+    if user_input.lower() == '/помощь':
+        chat_text.insert(tk.END, "Доступные команды:\n")
+        chat_text.insert(tk.END, "/помощь - отображение списка команд\n")
+        chat_text.insert(tk.END, "/сброс - сброс чата\n")
+        chat_text.insert(tk.END, "/обновления - отображение лога обновлений\n")
+        chat_text.insert(tk.END, "/сохранить - сохранить историю чата в файл\n")
+        chat_text.insert(tk.END, "/удалить аккаунт - удаление вашего аккаунта из чата\n")
+        chat_text.insert(tk.END, "-------------------------\n")
+        entry.delete(0, tk.END)
+        return
+
+    if user_input.lower() == '/сброс':
+        chat_text.delete(1.0, tk.END)
+        chat_text.insert(tk.END, "Чат с GPT-3.5 v0.1.6.0 Стабильная\n")
+        chat_text.insert(tk.END, "Введите '/помощь' для получения списка команд чата.\n")
+        chat_text.insert(tk.END, "-------------------------\n")
+        chat_history = []
+        save_chat_history(chat_history_file, chat_history)
+        entry.delete(0, tk.END)
+        return
+
+    if user_input.lower() == '/обновления' or user_input.lower() == 'покажи обновления':
+        chat_text.delete(1.0, tk.END)
+        chat_text.insert(tk.END, "GPT: Вот обновления чата:\n")
+        for update in update_log:
+            chat_text.insert(tk.END, update + "\n")
+        chat_text.insert(tk.END, f"Текущая версия чата: v0.1.6.0S\n")
+        chat_history.append(format_chat_message(user_username, user_input))
+        chat_history.append(format_chat_message(gpt_username, "Выведены обновления чата"))
+        entry.delete(0, tk.END)
+        return
+
+    if user_input.lower() == '/сохранить':
+        save_chat_history(chat_history_file, chat_history)
+        chat_text.insert(tk.END, "История чата сохранена в файл Chat_History.txt\n")
+        chat_text.insert(tk.END, "-------------------------\n")
+        entry.delete(0, tk.END)
+        return
+
+    if user_input.lower() == '/удалить аккаунт':
+        delete_account()
+        entry.delete(0, tk.END)
+        return
+
+    prompt = format_chat_message(user_username, user_input)
+    response = generate_chat(prompt, max_tokens=50)
+    formatted_response = format_chat_message(gpt_username, response)
+
+    chat_text.insert(tk.END, prompt + "\n")
+    chat_text.insert(tk.END, formatted_response + "\n")
+
+    chat_history.append(prompt)
+    chat_history.append(formatted_response)
+
+    entry.delete(0, tk.END)
+
+def change_theme():
+    current_theme = chat_text.cget("background")
+    new_theme = "black" if current_theme == "white" else "white"
+    chat_text.config(background=new_theme)
+
+def create_settings_window():
+    settings_window = tk.Toplevel(root)
+    settings_window.title("Настройки")
+    settings_window.geometry("300x200")
+
+    theme_label = tk.Label(settings_window, text="Тема:")
+    theme_label.pack()
+
+    change_theme_button = tk.Button(settings_window, text="Сменить тему", command=change_theme)
+    change_theme_button.pack()
+
+def send_message_with_enter(event):
+    send_message()
+
+def send_message_with_button():
+    send_message()
+
+def initialize_chat():
+    global root, chat_text, entry, user_username, gpt_username, chat_history, update_log
+
+    root = tk.Tk()
+    root.title("Чат с GPT-3.5 v0.1.6.0 Стабильная")
+    root.geometry("600x400")
+
+    chat_text = tk.Text(root)
+    chat_text.pack(expand=True, fill=tk.BOTH)
+    chat_text.config(state=tk.DISABLED)
+
+    entry_frame = tk.Frame(root)
+    entry_frame.pack(pady=10)
+
+    entry = tk.Entry(entry_frame, font=("Arial", 12))
+    entry.pack(side=tk.LEFT, expand=True, fill=tk.BOTH)
+    entry.bind("<Return>", send_message_with_enter)
+
+    send_button = tk.Button(entry_frame, text="\u2708", font=("Arial", 12), command=send_message_with_button)
+    send_button.pack(side=tk.RIGHT)
+
+    settings_button = tk.Button(root, text="\u2699", font=("Arial", 12), command=create_settings_window)
+    settings_button.place(x=10, y=10)
+
+    initialize_profiles()
+    gpt_profile = load_profile(gpt_profile_file)
+    user_profile = load_profile(user_profile_file)
+    user_username = user_profile["username"]
+    gpt_username = gpt_profile["username"]
+
+    chat_history = load_chat_history(chat_history_file)
+
+    update_log = load_update_log(update_log_file)
+
+    chat_text.config(state=tk.NORMAL)
+    chat_text.insert(tk.END, "Чат с GPT-3.5 v0.1.6.0 Стабильная\n")
+    chat_text.insert(tk.END, "Введите '/помощь' для получения списка команд чата.\n")
+    chat_text.insert(tk.END, "-------------------------\n")
+    chat_text.config(state=tk.DISABLED)
+
+    root.mainloop()
+
+if __name__ == "__main__":
+    initialize_chat()
+
+
+
